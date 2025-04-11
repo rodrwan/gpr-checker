@@ -32,7 +32,7 @@ func downloadDiff(repo string, prNumber int, githubToken string) string {
 	if err != nil {
 		panic("failed to create request: " + err.Error())
 	}
-	req.Header.Set("Authorization", "Bearer " + githubToken)
+	req.Header.Set("Authorization", "Bearer "+githubToken)
 	req.Header.Set("Accept", "application/vnd.github.v3.diff")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -84,7 +84,7 @@ func postGitHubComment(token, repo string, prNumber int, body string) {
 	if err != nil {
 		panic(fmt.Sprintf("failed to create GitHub request: %v", err))
 	}
-	req.Header.Set("Authorization", "Bearer " + token)
+	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/vnd.github+json")
 
 	resp, err := http.DefaultClient.Do(req)
@@ -101,12 +101,41 @@ func postGitHubComment(token, repo string, prNumber int, body string) {
 	fmt.Println("✅ Comment posted successfully!")
 }
 
+func validateGitHubToken(token, repo string) {
+	url := fmt.Sprintf("https://api.github.com/repos/%s", repo)
+
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to create token validation request: %v", err))
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		panic(fmt.Sprintf("GitHub token validation failed: %v", err))
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		panic("❌ Repository not found — check the --repo argument and GitHub token access.")
+	}
+
+	if resp.StatusCode == 401 || resp.StatusCode == 403 {
+		panic("❌ Invalid or unauthorized GitHub token. Make sure it has 'repo' scope and access to this repository.")
+	}
+
+	fmt.Println("✅ GitHub token validated successfully.")
+}
+
 func main() {
 	repo := flag.String("repo", "", "GitHub repository (owner/repo)")
 	prStr := flag.String("pr", "", "Pull request number")
 	openaiKey := flag.String("openai-key", "", "OpenAI API key")
 	githubToken := flag.String("github-token", "", "GitHub token")
 	flag.Parse()
+
+	validateGitHubToken(*githubToken, *repo)
 
 	repoVal := mustGet("GITHUB_REPOSITORY", *repo)
 	prVal := mustGet("PR_NUMBER", *prStr)
